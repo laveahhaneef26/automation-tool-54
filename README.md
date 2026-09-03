@@ -1,46 +1,46 @@
 # automation-tool-54
 
-Automation Tool 54 is a versatile Python-based application designed to streamline repetitive tasks and enhance productivity. From file management to data processing, this tool simplifies routine operations making them efficient and user-friendly.
+`automation-tool-54` is a lightweight, high-performance Python framework designed to streamline repetitive task execution through modular automation scripts. It provides a robust command-line interface to orchestrate local workflows and reduce manual overhead in daily operations.
 
 ## Features
-- **File Organizer**: Automatically sorts and organizes files into designated folders based on rules you define (e.g., file type, date created).
-- **Data Scraper**: Extracts data from various web pages using customizable scraping settings, enabling easy collection of information.
-- **Automated Reports**: Generates scheduled reports in multiple formats (CSV, PDF) from specified data sources, reducing the need for manual data handling.
-- **Task Scheduler**: Run scripts at specified intervals or specific times with built-in task scheduling capabilities.
+
+*   **Task Scheduling:** Define recurring operations using a flexible cron-like syntax within simple YAML configuration files.
+*   **Parallel Execution:** Built-in multi-threading support allows for concurrent processing of independent tasks, significantly reducing total runtime.
+*   **Secure Logging:** Integrated audit logging system captures execution status, timestamps, and error traces to dedicated log files.
+*   **Extensible Plugin Architecture:** Easily extend core functionality by dropping custom Python modules into the `plugins/` directory.
 
 ## Installation
 
-To install Automation Tool 54, follow these simple steps:
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Developer/automation-tool-54.git
-   ```
-
-2. Navigate into the project directory:
-   ```bash
-   cd automation-tool-54
-   ```
-
-3. Install required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Basic Usage Example
-
-After installation, you can quickly start organizing your files by executing the following command:
+Ensure you have Python 3.8+ installed. Clone the repository and install the required dependencies:
 
 ```bash
-python main.py organize --source /path/to/source --destination /path/to/destination --rule "type:images"
+git clone https://github.com/Developer/automation-tool-54.git
+cd automation-tool-54
+pip install -r requirements.txt
 ```
 
-This command will move all image files from the specified source directory to the destination directory based on the defined rule.
+## Usage
+
+To execute a predefined automation sequence, use the CLI tool pointing to your configuration file:
+
+```bash
+python main.py --config config/tasks.yaml --verbose
+```
+
+**Example configuration (`tasks.yaml`):**
+
+```yaml
+tasks:
+  - name: "cleanup-temp-files"
+    command: "rm -rf /tmp/cache/*"
+    interval: "daily"
+  - name: "sync-data"
+    command: "python scripts/sync.py --mode=full"
+    interval: "hourly"
+```
 
 ## License
 
-![MIT License](https://img.shields.io/badge/license-MIT-brightgreen)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details. 
-
-Together, let's automate the mundane and focus on what truly matters!
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
