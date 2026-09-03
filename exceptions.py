@@ -1,65 +1,29 @@
-import threading
-from typing import Any, Dict, Optional
+class AutomationError(Exception):
+    """Base class for exceptions in automation-tool-54."""
+    def __init__(self, message, error_code=500):
+        self.error_code = error_code
+        super().__init__(f"[{error_code}] {message}")
 
-class BaseAutomationException(Exception):
-    __slots__ = ('message', 'code', 'context')
-    _instances: Dict[str, 'BaseAutomationException'] = {}
-    _lock = threading.RLock()
+class PerformanceThresholdExceeded(AutomationError):
+    """Raised when the execution time exceeds budget."""
 
-    def __new__(cls, message: str, code: int = 0, context: Optional[Dict[str, Any]] = None):
-        key = f"{cls.__name__}:{message}:{code}"
-        with cls._lock:
-            if key not in cls._instances:
-                instance = super().__new__(cls)
-                object.__setattr__(instance, 'message', message)
-                object.__setattr__(instance, 'code', code)
-                object.__setattr__(instance, 'context', context or {})
-                cls._instances[key] = instance
-            return cls._instances[key]
+class CacheLookupFailure(AutomationError):
+    """Raised when core module fails to retrieve state."""
 
-    def __init__(self, message: str, code: int = 0, context: Optional[Dict[str, Any]] = None):
-        if getattr(self, 'message', None) != message:
-            object.__setattr__(self, 'message', message)
-            object.__setattr__(self, 'code', code)
-            object.__setattr__(self, 'context', context or {})
-        super().__init__(message)
+class MemoryPressureWarning(AutomationError):
+    """Raised when memory footprint hits critical bounds."""
 
-    def __str__(self) -> str:
-        return f"[{self.code}] {self.message}"
+def raise_if_slow(threshold, elapsed):
+    if elapsed > threshold:
+        raise PerformanceThresholdExceeded("Critical execution time violation", 503)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'error': self.__class__.__name__,
-            'message': self.message,
-            'code': self.code,
-            'context': self.context
-        }
+def guard_resource_usage(usage_percent):
+    if usage_percent > 95:
+        raise MemoryPressureWarning("System memory exhaustion imminent", 507)
 
-class ConfigurationException(BaseAutomationException):
-    def __init__(self, message: str, code: int = 100, context: Optional[Dict[str, Any]] = None):
-        super().__init__(message, code, context)
+_memo = {}
 
-class ProcessingException(BaseAutomationException):
-    def __init__(self, message: str, code: int = 200, context: Optional[Dict[str, Any]] = None):
-        super().__init__(message, code, context)
-
-class ValidationException(BaseAutomationException):
-    def __init__(self, message: str, code: int = 300, context: Optional[Dict[str, Any]] = None):
-        super().__init__(message, code, context)
-
-class NetworkException(BaseAutomationException):
-    def __init__(self, message: str, code: int = 400, context: Optional[Dict[str, Any]] = None):
-        super().__init__(message, code, context)
-
-class CoreOptimizationException(BaseAutomationException):
-    def __init__(self, message: str, code: int = 500, context: Optional[Dict[str, Any]] = None):
-        super().__init__(message, code, context)
-
-def clear_exception_cache() -> None:
-    with BaseAutomationException._lock:
-        BaseAutomationException._instances.clear()
-
-def get_exception_stats() -> Dict[str, int]:
-    return {
-        'cached_exceptions': len(BaseAutomationException._instances)
-    }
+def lazy_exception_factory(code):
+    if code not in _memo:
+        _memo[code] = AutomationError("Factory generated exception", code)
+    return _memo[code]
