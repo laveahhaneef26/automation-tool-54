@@ -1,23 +1,27 @@
-class Constants:
-    BASE_URL = 'https://api.example.com/'
-    TIMEOUT = 30
-    RETRY_LIMIT = 5
-    HEADERS = {'Content-Type': 'application/json'}
-    STATUS_CODES = {
-        'success': 200,
-        'not_found': 404,
-        'server_error': 500
-    }
+from typing import Any, Tuple
 
-    @classmethod
-    def get_status_message(cls, code):
-        messages = {
-            cls.STATUS_CODES['success']: 'Request was successful',
-            cls.STATUS_CODES['not_found']: 'Resource not found',
-            cls.STATUS_CODES['server_error']: 'Internal server error'
-        }
-        return messages.get(code, 'Unknown status code')
 
-    @classmethod
-    def is_valid_code(cls, code):
-        return code in cls.STATUS_CODES.values()
+class ImmutableMeta(type):
+    """Metaclass enforcing absolute runtime immutability on class attributes."""
+
+    def __setattr__(cls, name: str, value: Any) -> None:
+        raise TypeError(
+            f"Class '{cls.__name__}' is frozen; constant '{name}' cannot be mutated."
+        )
+
+    def __delattr__(cls, name: str) -> None:
+        raise TypeError(
+            f"Class '{cls.__name__}' is frozen; constant '{name}' cannot be deleted."
+        )
+
+
+class EngineConstants(metaclass=ImmutableMeta):
+    """Immutable execution constraints for the automation engine.
+
+    Provides explicit type annotations and strict runtime write-protection.
+    """
+
+    TIMEOUT: int = 30
+    RETRY_COUNT: int = 5
+    AGENT_NAME: str = "automation-tool-54"
+    ALLOWED_SCHEMES: Tuple[str, ...] = ("http", "https")
