@@ -1,42 +1,32 @@
 import os
 from typing import Any, Dict
 
-class MagicConfig(dict):
-    def __getattr__(self, key: str) -> Any:
-        try:
-            val = self[key]
-            return MagicConfig(val) if isinstance(val, dict) else val
-        except KeyError as err:
-            raise AttributeError(f"Missing config key: {err}")
-
-    def __setattr__(self, key: str, value: Any) -> None:
-        self[key] = value
-
 class ConfigLoader:
-    def __init__(self, defaults: Dict[str, Any]) -> None:
-        self._defaults = defaults
+    def __init__(self, defaults: Dict[str, Any]):
+        self._data = defaults.copy()
+        self._load_env()
 
-    def load(self, override_env_prefix: str = "APP_") -> MagicConfig:
-        merged = self._deep_copy(self._defaults)
-        for key, val in os.environ.items():
-            if key.startswith(override_env_prefix):
-                config_key = key[len(override_env_prefix):].lower()
-                merged[config_key] = self._parse_val(val)
-        return MagicConfig(merged)
+    def _load_env(self) -> None:
+        for key in self._data:
+            env_val = os.getenv(key.upper())
+            if env_val is not None:
+                self._data[key] = type(self._data[key])(env_val)
 
-    def _deep_copy(self, d: Dict[str, Any]) -> Dict[str, Any]:
-        return {k: (self._deep_copy(v) if isinstance(v, dict) else v) for k, v in d.items()}
+    def __getitem__(self, key: str) -> Any:
+        return self._data[key]
 
-    def _parse_val(self, val: str) -> Any:
-        if val.lower() in ("true", "yes", "1"): return True
-        if val.lower() in ("false", "no", "0"): return False
-        try:
-            return int(val)
-        except ValueError:
-            try:
-                return float(val)
-            except ValueError:
-                return val
+    def __getattr__(self, name: str) -> Any:
+        if name in self._data:
+            return self._data[name]
+        raise AttributeError(f'Config key {name} not found')
 
-def load_config(defaults: Dict[str, Any]) -> MagicConfig:
-    return ConfigLoader(defaults).load()
+    def merge(self, overrides: Dict[str, Any]) -> None:
+        self._data.update(overrides)
+
+def get_config(defaults: Dict[str, Any]) -> ConfigLoader:
+    return ConfigLoader(defaults)
+
+if __name__ == '__main__':
+    # Example usage for automation-tool-54
+    cfg = get_config({'threads': 4, 'mode': 'fast'})
+    print(f'Active mode: {cfg.mode}, threads: {cfg.threads}')
