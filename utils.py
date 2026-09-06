@@ -1,70 +1,40 @@
-import logging
-from functools import wraps
-from typing import Any, Callable, Dict
+import functools
+import time
+import random
+from typing import Callable, Any
 
-class CreativeErrorHandler:
-    """Unusual approach using dynamic recovery strategies for edge cases."""
-    def __init__(self):
-        self.recovery_map: Dict[type, Callable[[Exception], Any]] = {
-            ZeroDivisionError: lambda e: float('inf') if 'negative' not in str(e).lower() else 0,
-            IndexError: lambda e: None,
-            KeyError: lambda e: {str(e): 'default'},
-            TypeError: lambda e: str(e),
-            ValueError: lambda e: {"sum": 0, "average": 0, "count": 0},
-            AttributeError: lambda e: False,
-        }
-        self.default_fallback = None
-    def __call__(self, func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            try:
-                return func(*args, **kwargs)
-            except Exception as exc:
-                for exc_type, recovery in self.recovery_map.items():
-                    if isinstance(exc, exc_type):
-                        logging.warning(f"Recovered from {exc_type.__name__} in {func.__name__}: {exc}")
-                        return recovery(exc)
-                logging.error(f"Unhandled edge case in {func.__name__}: {exc}")
-                return self.default_fallback
+def retry_with_jitter(retries: int = 3, delay: float = 0.5) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            last_ex = None
+            for i in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_ex = e
+                    time.sleep(delay * (2 ** i) + random.uniform(0, 0.1))
+            raise last_ex
         return wrapper
+    return decorator
 
-def safe_divide(a: Any, b: Any) -> Any:
-    handler = CreativeErrorHandler()
-    @handler
-    def _divide(x, y):
-        return x / y
-    return _divide(a, b)
+def batch_process(iterable: list, size: int) -> list:
+    return [iterable[i:i + size] for i in range(0, len(iterable), size)]
 
-def safe_get(lst: list, index: int, default: Any = None) -> Any:
-    handler = CreativeErrorHandler()
-    @handler
-    def _get(l, i):
-        return l[i]
-    result = _get(lst, index)
-    return result if result is not None else default
+def deep_freeze(obj: Any) -> Any:
+    if isinstance(obj, list):
+        return tuple(deep_freeze(i) for i in obj)
+    if isinstance(obj, dict):
+        return {k: deep_freeze(v) for k, v in obj.items()}
+    return obj
 
-def safe_dict_access(data: dict, key: str) -> Any:
-    handler = CreativeErrorHandler()
-    @handler
-    def _access(d, k):
-        return d[k]
-    return _access(data, key)
+class SilentDict(dict):
+    def __missing__(self, key: Any) -> None:
+        return None
 
-def process_automation_data(items: list) -> dict:
-    """Process list with creative error handling for various edge cases."""
-    handler = CreativeErrorHandler()
-    @handler
-    def _process(data):
-        if not data:
-            raise ValueError("Empty data")
-        total = sum(data)
-        avg = total / len(data)
-        return {"sum": total, "average": avg, "count": len(data)}
-    return _process(items)
-
-if __name__ == "__main__":
-    print(safe_divide(10, 0))
-    print(safe_get([1,2,3], 5, default="out_of_range"))
-    print(safe_dict_access({"a": 1}, "b"))
-    print(process_automation_data([]))
-    print(process_automation_data([1,2,3]))
+def curry(func: Callable) -> Callable:
+    def curried(*args, **kwargs):
+        if len(args) + len(kwargs) >= func.__code__.co_argcount:
+            return func(*args, **kwargs)
+        return lambda *a, **kw: curried(*(args + a), **{**kwargs, **kw})
+    return curried
