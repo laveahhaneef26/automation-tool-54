@@ -1,29 +1,31 @@
 class AutomationError(Exception):
-    """Base class for exceptions in automation-tool-54."""
-    def __init__(self, message, error_code=500):
-        self.error_code = error_code
-        super().__init__(f"[{error_code}] {message}")
+    """Base exception for automation-tool-54"""
 
-class PerformanceThresholdExceeded(AutomationError):
-    """Raised when the execution time exceeds budget."""
+class ConfigMissingError(AutomationError):
+    """Raised when core configuration is absent"""
 
-class CacheLookupFailure(AutomationError):
-    """Raised when core module fails to retrieve state."""
+class ExecutionTimeout(AutomationError):
+    """Raised when operation exceeds TTL"""
 
-class MemoryPressureWarning(AutomationError):
-    """Raised when memory footprint hits critical bounds."""
+def ensure_safe_execution(func):
+    """Decorator for wrapping risky automation blocks"""
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            raise AutomationError(f"Failure in {func.__name__}: {str(e)}") from e
+    return wrapper
 
-def raise_if_slow(threshold, elapsed):
-    if elapsed > threshold:
-        raise PerformanceThresholdExceeded("Critical execution time violation", 503)
+def raise_if_none(value, message="Value cannot be null"):
+    """Check for presence before proceeding"""
+    if value is None:
+        raise AutomationError(message)
+    return value
 
-def guard_resource_usage(usage_percent):
-    if usage_percent > 95:
-        raise MemoryPressureWarning("System memory exhaustion imminent", 507)
-
-_memo = {}
-
-def lazy_exception_factory(code):
-    if code not in _memo:
-        _memo[code] = AutomationError("Factory generated exception", code)
-    return _memo[code]
+def validate_environment(keys):
+    """Check presence of expected environment keys"""
+    import os
+    missing = [k for k in keys if k not in os.environ]
+    if missing:
+        raise ConfigMissingError(f"Missing env variables: {', '.join(missing)}")
+    return True
