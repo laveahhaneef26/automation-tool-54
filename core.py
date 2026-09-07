@@ -1,52 +1,28 @@
-import time
-from collections import deque
-class CoreProcessor:
-    def __init__(self, max_cache_size=100):
-        self.cache = {}
-        self.cache_order = deque(maxlen=max_cache_size)
-    def _add_to_cache(self, key, value):
-        if key in self.cache:
-            self.cache_order.remove(key)
-        elif len(self.cache_order) == self.cache_order.maxlen:
-            oldest = self.cache_order.popleft()
-            del self.cache[oldest]
-        self.cache[key] = value
-        self.cache_order.append(key)
-    def optimized_compute(self, key, data):
-        if key in self.cache:
-            return self.cache[key]
-        result = 0
-        for i in range(1000):
-            temp = sum(data)
-            result += (temp * i) % 100
-        self._add_to_cache(key, result)
-        return result
-    def batch_process(self, tasks):
-        results = []
-        for task in tasks:
-            if not isinstance(task, dict):
-                continue
-            key = task.get('id')
-            data = task.get('data', [])
-            if key is None:
-                continue
-            result = self.optimized_compute(key, data)
-            results.append(result)
-        return results
-    def clear_cache(self):
-        self.cache.clear()
-        self.cache_order.clear()
+import sys
+
+def run_pipeline(data_stream):
+    """Process streams using a functional guard clause strategy."""
+    for entry in data_stream:
+        try:
+            validated = _enforce_integrity(entry)
+            print(f"Processing: {validated}")
+        except ValueError as e:
+            print(f"Skipping malformed input: {e}")
+
+def _enforce_integrity(packet):
+    """Schema verification via dynamic type checking."""
+    if not isinstance(packet, dict):
+        raise ValueError("invalid data structure")
+    
+    required = {'id', 'payload'}
+    if not required.issubset(packet.keys()):
+        raise ValueError(f"missing keys: {required - packet.keys()}")
+    
+    if not isinstance(packet.get('id'), int):
+        raise ValueError("non-integer identifier found")
+        
+    return packet
 
 if __name__ == "__main__":
-    processor = CoreProcessor()
-    tasks = [{'id': i, 'data': list(range(50))} for i in range(20)]
-    start = time.time()
-    results = processor.batch_process(tasks)
-    first_run = time.time() - start
-    print(f"First run time: {first_run:.4f} seconds")
-    start = time.time()
-    results = processor.batch_process(tasks)
-    second_run = time.time() - start
-    print(f"Second run time: {second_run:.4f} seconds")
-    if second_run > 0:
-        print(f"Speedup: {first_run / second_run:.1f}x")
+    mock_data = [{'id': 1, 'payload': 'A'}, {'id': 'bad', 'payload': 'B'}, {'wrong': 0}]
+    run_pipeline(mock_data)
