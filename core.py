@@ -1,28 +1,31 @@
-import sys
+import functools
+import time
+from typing import Callable, Any, List, Dict
 
-def run_pipeline(data_stream):
-    """Process streams using a functional guard clause strategy."""
-    for entry in data_stream:
-        try:
-            validated = _enforce_integrity(entry)
-            print(f"Processing: {validated}")
-        except ValueError as e:
-            print(f"Skipping malformed input: {e}")
+class FastExecutionPipeline:
+    __slots__ = ('_transforms', '_compiled_chain')
 
-def _enforce_integrity(packet):
-    """Schema verification via dynamic type checking."""
-    if not isinstance(packet, dict):
-        raise ValueError("invalid data structure")
-    
-    required = {'id', 'payload'}
-    if not required.issubset(packet.keys()):
-        raise ValueError(f"missing keys: {required - packet.keys()}")
-    
-    if not isinstance(packet.get('id'), int):
-        raise ValueError("non-integer identifier found")
-        
-    return packet
+    def __init__(self):
+        self._transforms: List[Callable[[Any], Any]] = []
+        self._compiled_chain: Callable[[Any], Any] = lambda x: x
 
-if __name__ == "__main__":
-    mock_data = [{'id': 1, 'payload': 'A'}, {'id': 'bad', 'payload': 'B'}, {'wrong': 0}]
-    run_pipeline(mock_data)
+    def register(self, fn: Callable[[Any], Any]) -> 'FastExecutionPipeline':
+        self._transforms.append(fn)
+        self._recompile()
+        return self
+
+    def _recompile(self) -> None:
+        chain = lambda x: x
+        for fn in reversed(self._transforms):
+            chain = (lambda f, g: lambda x: f(g(x)))(fn, chain)
+        self._compiled_chain = chain
+
+    def execute_batch(self, items: List[Any]) -> List[Any]:
+        runner = self._compiled_chain
+        return [runner(item) for item in items]
+
+def benchmark_pipeline(pipeline: FastExecutionPipeline, data: List[int]) -> Dict[str, float]:
+    start = time.perf_counter()
+    results = pipeline.execute_batch(data)
+    elapsed = time.perf_counter() - start
+    return {"processed_count": len(results), "execution_time_sec": elapsed}
