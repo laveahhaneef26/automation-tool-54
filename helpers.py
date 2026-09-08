@@ -1,46 +1,45 @@
 import functools
 import logging
+import time
 from typing import Callable, Any
 
-logger = logging.getLogger('automation-tool-54')
+def time_execution(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        elapsed = time.perf_counter() - start
+        logging.info(f"{func.__name__} executed in {elapsed:.4f}s")
+        return result
+    return wrapper
 
-class UnrecoverableError(Exception):
-    """Custom sentinel for non-retryable logical failures."""
-    pass
+def flatten_nested_data(data: list[Any]) -> list[Any]:
+    accumulator = []
+    for item in data:
+        if isinstance(item, list):
+            accumulator.extend(flatten_nested_data(item))
+        else:
+            accumulator.append(item)
+    return accumulator
 
-def robust_execution(retries: int = 3):
-    """Decorator implementing aggressive error containment and strategy."""
-    def decorator(func: Callable):
+class DataSanitizer:
+    def __init__(self, key_map: dict[str, str]):
+        self.key_map = key_map
+
+    def clean(self, dirty_dict: dict[str, Any]) -> dict[str, Any]:
+        return {self.key_map.get(k, k): v for k, v in dirty_dict.items() if v is not None}
+
+def retry_operation(max_attempts: int = 3, delay: float = 1.0):
+    def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
+        def wrapper(*args, **kwargs):
             last_ex = None
-            for attempt in range(retries + 1):
+            for i in range(max_attempts):
                 try:
                     return func(*args, **kwargs)
-                except UnrecoverableError as e:
-                    logger.critical(f"Hard failure: {e}")
-                    raise
                 except Exception as e:
                     last_ex = e
-                    logger.warning(f"Attempt {attempt} failed: {e}")
-            logger.error("Exhausted all recovery attempts")
+                    time.sleep(delay * (2 ** i))
             raise last_ex
         return wrapper
     return decorator
-
-def safe_access(data: dict, key: str, fallback: Any = None) -> Any:
-    """Chainable deep dictionary traversal with defensive defaulting."""
-    try:
-        keys = key.split('.')
-        for k in keys:
-            data = data[k]
-        return data
-    except (KeyError, TypeError, AttributeError):
-        return fallback
-
-def dynamic_validator(obj: Any, predicate: Callable[[Any], bool]) -> bool:
-    """Predicate-based verification for volatile edge case inputs."""
-    try:
-        return bool(predicate(obj))
-    except Exception:
-        return False
