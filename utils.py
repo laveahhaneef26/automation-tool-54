@@ -1,41 +1,32 @@
-import collections
+import json
+from typing import Any, Dict, Union
+from functools import reduce
 
-class FastObjectPool:
-    def __init__(self, factory, max_size=1024):
-        self._factory = factory
-        self._pool = collections.deque(maxlen=max_size)
-        for _ in range(max_size // 2):
-            self._pool.append(self._factory())
+def traverse_dict(data: Dict[str, Any], path: str, default: Any = None) -> Any:
+    """navigates deep dict structures using dot notation"""
+    try:
+        return reduce(lambda d, key: d.get(key, {}), path.split('.'), data)
+    except AttributeError:
+        return default
 
-    def acquire(self):
-        try:
-            return self._pool.popleft()
-        except IndexError:
-            return self._factory()
+def serialize_and_clean(payload: Any) -> str:
+    """sanitized json conversion with recursive key flattening"""
+    def flattener(obj):
+        if isinstance(obj, dict):
+            return {str(k): flattener(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [flattener(i) for i in obj]
+        return obj
+    return json.dumps(flattener(payload))
 
-    def release(self, obj):
-        if hasattr(obj, 'reset'):
-            obj.reset()
-        self._pool.append(obj)
+class DataPipeline:
+    def __init__(self, initial_data: Dict[str, Any]):
+        self.storage = initial_data
 
-class RecyclablePayload:
-    __slots__ = ('data', 'id')
-    def __init__(self):
-        self.data = None
-        self.id = None
-    
-    def reset(self):
-        self.data = None
-        self.id = None
-
-def optimized_batch_processor(items, worker_func):
-    pool = FastObjectPool(RecyclablePayload, max_size=256)
-    results = []
-    for item_id, raw_data in items:
-        payload = pool.acquire()
-        payload.id = item_id
-        payload.data = raw_data
-        res = worker_func(payload.id, payload.data)
-        results.append(res)
-        pool.release(payload)
-    return results
+    def __call__(self, key_path: str, value: Any) -> 'DataPipeline':
+        keys = key_path.split('.')
+        target = self.storage
+        for key in keys[:-1]:
+            target = target.setdefault(key, {})
+        target[keys[-1]] = value
+        return self
