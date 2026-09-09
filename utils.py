@@ -1,40 +1,41 @@
-import functools
-import time
-import random
-from typing import Callable, Any
+import collections
 
-def retry_with_jitter(retries: int = 3, delay: float = 0.5) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_ex = None
-            for i in range(retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_ex = e
-                    time.sleep(delay * (2 ** i) + random.uniform(0, 0.1))
-            raise last_ex
-        return wrapper
-    return decorator
+class FastObjectPool:
+    def __init__(self, factory, max_size=1024):
+        self._factory = factory
+        self._pool = collections.deque(maxlen=max_size)
+        for _ in range(max_size // 2):
+            self._pool.append(self._factory())
 
-def batch_process(iterable: list, size: int) -> list:
-    return [iterable[i:i + size] for i in range(0, len(iterable), size)]
+    def acquire(self):
+        try:
+            return self._pool.popleft()
+        except IndexError:
+            return self._factory()
 
-def deep_freeze(obj: Any) -> Any:
-    if isinstance(obj, list):
-        return tuple(deep_freeze(i) for i in obj)
-    if isinstance(obj, dict):
-        return {k: deep_freeze(v) for k, v in obj.items()}
-    return obj
+    def release(self, obj):
+        if hasattr(obj, 'reset'):
+            obj.reset()
+        self._pool.append(obj)
 
-class SilentDict(dict):
-    def __missing__(self, key: Any) -> None:
-        return None
+class RecyclablePayload:
+    __slots__ = ('data', 'id')
+    def __init__(self):
+        self.data = None
+        self.id = None
+    
+    def reset(self):
+        self.data = None
+        self.id = None
 
-def curry(func: Callable) -> Callable:
-    def curried(*args, **kwargs):
-        if len(args) + len(kwargs) >= func.__code__.co_argcount:
-            return func(*args, **kwargs)
-        return lambda *a, **kw: curried(*(args + a), **{**kwargs, **kw})
-    return curried
+def optimized_batch_processor(items, worker_func):
+    pool = FastObjectPool(RecyclablePayload, max_size=256)
+    results = []
+    for item_id, raw_data in items:
+        payload = pool.acquire()
+        payload.id = item_id
+        payload.data = raw_data
+        res = worker_func(payload.id, payload.data)
+        results.append(res)
+        pool.release(payload)
+    return results
