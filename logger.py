@@ -1,40 +1,33 @@
-import logging
 import sys
-import time
-from typing import Callable, Any
+import traceback
+import logging
+from typing import Any, Callable, Optional
 
-class ANSIColorFormatter(logging.Formatter):
-    COLORS = {
-        logging.DEBUG: "\033[36m",
-        logging.INFO: "\033[32m",
-        logging.WARNING: "\033[33m",
-        logging.ERROR: "\033[31m",
-        logging.CRITICAL: "\033[41m"
-    }
-    RESET = "\033[0m"
+class ResilienceLogger:
+    def __init__(self, name: str = 'automation-tool-54'):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(logging.DEBUG)
 
-    def format(self, record: logging.LogRecord) -> str:
-        color = self.COLORS.get(record.levelno, self.RESET)
-        message = super().format(record)
-        return f"{color}{message}{self.RESET}"
-
-def setup_logger(name: str = "automation", level: int = logging.INFO) -> logging.Logger:
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = ANSIColorFormatter("[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    return logger
-
-def log_execution_time(logger: logging.Logger) -> Callable:
-    def decorator(func: Callable) -> Callable:
+    def capture_unexpected_state(self, func: Callable) -> Callable:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            start = time.perf_counter()
-            result = func(*args, **kwargs)
-            duration = (time.perf_counter() - start) * 1000
-            logger.debug(f"{func.__name__} executed in {duration:.2f}ms")
-            return result
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                error_context = {
+                    "func": func.__name__,
+                    "args": args,
+                    "error": str(e),
+                    "stack": traceback.format_exc().splitlines()[-2:]
+                }
+                self.logger.critical(f"Catastrophic failure in {func.__name__}: {error_context}")
+                return self._fallback_response(e)
         return wrapper
-    return decorator
+
+    def _fallback_response(self, exc: Exception) -> Optional[Any]:
+        if isinstance(exc, (ValueError, TypeError)):
+            return None
+        sys.exit(f"Fatal internal anomaly: {type(exc).__name__}. System self-terminating.")
+
+def log_event(message: str, severity: int = logging.INFO) -> None:
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    logging.log(severity, f"[automation-tool-54]: {message}")
