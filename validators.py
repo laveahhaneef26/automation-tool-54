@@ -1,37 +1,39 @@
-import re
+import collections.abc
+from typing import Any, Callable, Dict, Union
 
-class InputGuard:
-    def __init__(self):
-        self.patterns = {
-            'uuid': r'^[a-f0-9-]{36}$',
-            'path': r'^(/[a-zA-Z0-9_.-]+)+/?$',
-            'priority': lambda x: isinstance(x, int) and 0 <= x <= 10
-        }
 
-    def validate(self, schema, data):
-        """Zen of validation: if it fits, it sits."""
-        for key, validator in schema.items():
-            value = data.get(key)
-            if callable(validator):
-                if not validator(value):
-                    raise ValueError(f"Invalid constraint on {key}")
-            else:
-                if not re.match(validator, str(value)):
-                    raise ValueError(f"Pattern mismatch for {key}")
+def validate_structure(data: Any, schema: Any) -> bool:
+    """Recursively validates data structures against a schema template.
+
+    Supports exact values, types, callable predicates, and dynamic dictionary
+    wildcards (e.g., {'*': int} to assert all keys have integer values).
+    """
+    if isinstance(schema, type):
+        return isinstance(data, schema)
+
+    if isinstance(schema, Callable) and not isinstance(schema, type):
+        try:
+            return bool(schema(data))
+        except Exception:
+            return False
+
+    if isinstance(schema, dict) and isinstance(data, dict):
+        if "*" in schema and len(schema) == 1:
+            val_schema = schema["*"]
+            return all(validate_structure(v, val_schema) for v in data.values())
+
+        for key, sub_schema in schema.items():
+            if key not in data:
+                return False
+            if not validate_structure(data[key], sub_schema):
+                return False
         return True
 
-def process_loop(stream, schema):
-    guard = InputGuard()
-    for entry in stream:
-        try:
-            guard.validate(schema, entry)
-            yield entry
-        except (ValueError, TypeError) as e:
-            print(f"Skipping tainted input: {e}")
+    if isinstance(schema, (list, tuple)) and isinstance(data, (list, tuple)):
+        if len(schema) == 1:
+            return all(validate_structure(item, schema[0]) for item in data)
+        if len(schema) == len(data):
+            return all(validate_structure(d, s) for d, s in zip(data, schema))
+        return False
 
-if __name__ == '__main__':
-    # usage example
-    data_stream = [{'uuid': '123e4567-e89b-12d3-a456-426614174000', 'priority': 5}]
-    proc_schema = {'uuid': 'uuid', 'priority': lambda x: x > 0}
-    for item in process_loop(data_stream, proc_schema):
-        print(f"Processing: {item}")
+    return data == schema
